@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SATNEX — Satellite Network Explorer</title>
+
+  <!-- CesiumJS CSS -->
+  <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Widgets/widgets.css">
+
+  <!-- FontAwesome Icons & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="dark-theme">
+  <!-- Top Navigation Bar -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo">
+        <i class="fa-solid fa-satellite-dish logo-icon"></i>
+        <span class="logo-title">SAT<span class="logo-accent">NEX</span></span>
+        <span class="logo-subtitle">Satellite Network Explorer</span>
+        <span class="badge version-badge">V4 PRO</span>
+      </div>
+      <div class="stat-item" id="catalogStat">
+        <span class="stat-label">CATALOG:</span>
+        <span class="stat-val" id="satCountVal">Loading...</span>
+      </div>
+      <div class="stat-item" id="fpsStat">
+        <span class="stat-label">FPS:</span>
+        <span class="stat-val" id="fpsVal">60</span>
+      </div>
+    </div>
+
+    <!-- Global Search -->
+    <div class="header-center">
+      <div class="search-container">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="text" id="globalSearchInput"
+          placeholder="Search satellite, NORAD ID (e.g. 25544), country, city, or coordinates..." autocomplete="off">
+        <button id="clearSearchBtn" class="icon-btn search-clear-btn" style="display: none;"><i
+            class="fa-solid fa-xmark"></i></button>
+        <div id="searchResultsDropdown" class="search-dropdown"></div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <!-- Multi-Follow Fleet Toggle -->
+      <button id="toggleFleetDockBtn" class="header-pill" title="Toggle Followed Satellites Fleet Dock">
+        <i class="fa-solid fa-crosshairs"></i>
+        <span>Fleet (<strong id="headerFollowCount">0</strong>)</span>
+      </button>
+
+      <!-- View Reset -->
+      <button id="resetViewBtn" class="icon-btn" title="Reset Camera View"><i
+          class="fa-solid fa-earth-americas"></i></button>
+
+      <!-- 2D/3D Toggle -->
+      <button id="dimensionToggleBtn" class="icon-btn" title="Toggle 3D / 2.5D / 2D"><i
+          class="fa-solid fa-cube"></i></button>
+
+      <!-- Help / About Modal Toggle -->
+      <button id="aboutBtn" class="icon-btn" title="System Architecture & Sources"><i
+          class="fa-solid fa-circle-info"></i></button>
+    </div>
+  </header>
+
+  <!-- Main Application Workspace -->
+  <main class="app-main">
+    <!-- Left Toolbar -->
+    <aside class="left-toolbar">
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-panel="fleetPanel" title="Satellite Fleet & Filters">
+          <i class="fa-solid fa-satellite"></i>
+          <span class="nav-label">Fleet</span>
+        </button>
+        <button class="nav-tab" data-panel="launchesPanel" title="Upcoming Launches">
+          <i class="fa-solid fa-rocket"></i>
+          <span class="nav-label">Launches</span>
+        </button>
+        <button class="nav-tab" data-panel="reentriesPanel" title="Predicted Reentries">
+          <i class="fa-solid fa-meteor"></i>
+          <span class="nav-label">Reentry</span>
+        </button>
+        <button class="nav-tab" data-panel="researchPanel" title="Research Tools & Pass Analysis">
+          <i class="fa-solid fa-microscope"></i>
+          <span class="nav-label">Research</span>
+        </button>
+        <button class="nav-tab" data-panel="bookmarksPanel" title="Saved Satellites">
+          <i class="fa-solid fa-bookmark"></i>
+          <span class="nav-label">Saved</span>
+        </button>
+        <button class="nav-tab" data-panel="layersPanel" title="Imagery & Map Overlays">
+          <i class="fa-solid fa-layer-group"></i>
+          <span class="nav-label">Layers</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Expandable Left Drawer Content -->
+    <section id="leftDrawer" class="left-drawer">
+      <div class="drawer-header">
+        <h3 id="drawerTitle"><i class="fa-solid fa-satellite"></i> Satellite Fleet</h3>
+        <button id="closeDrawerBtn" class="icon-btn close-drawer"><i class="fa-solid fa-chevron-left"></i></button>
+      </div>
+      <div class="drawer-body">
+        <!-- Fleet Panel -->
+        <div id="fleetPanel" class="drawer-tab-content active">
+          <div class="filter-group">
+            <span class="filter-label">ORBIT CLASSIFICATION</span>
+            <div class="filter-chips">
+              <button class="filter-chip active" data-filter="all">All</button>
+              <button class="filter-chip" data-filter="leo">LEO (&lt;2000 km)</button>
+              <button class="filter-chip" data-filter="meo">MEO</button>
+              <button class="filter-chip" data-filter="geo">GEO (35,786 km)</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">MISSION PURPOSE</span>
+            <div class="filter-chips">
+              <button class="filter-chip active" data-purpose="all">All Missions</button>
+              <button class="filter-chip" data-purpose="stations">Stations / Crew</button>
+              <button class="filter-chip" data-purpose="navigation">GPS / GNSS</button>
+              <button class="filter-chip" data-purpose="weather">Earth / Weather</button>
+              <button class="filter-chip" data-purpose="science">Science</button>
+              <button class="filter-chip" data-purpose="communication">Communication</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">COUNTRY / OPERATOR</span>
+            <div class="filter-chips">
+              <button class="filter-chip active" data-country="all">All Nations</button>
+              <button class="filter-chip" data-country="US">United States (US)</button>
+              <button class="filter-chip" data-country="IN">India (IN) 🇮🇳</button>
+              <button class="filter-chip" data-country="CN">China (CN)</button>
+              <button class="filter-chip" data-country="RU">Russia (RU/CIS)</button>
+              <button class="filter-chip" data-country="ESA">Europe (ESA)</button>
+              <button class="filter-chip" data-country="UK">United Kingdom (UK)</button>
+              <button class="filter-chip" data-country="JP">Japan (JP)</button>
+            </div>
+            <div class="country-select-wrap mt-2">
+              <select id="fleetCountrySelect" class="styled-select" title="Filter by Specific Country">
+                <option value="all">-- Filter from All 80+ Countries --</option>
+              </select>
+            </div>
+
+            <!-- Fleet 3D Orbital Trajectories Toggle -->
+            <div class="fleet-trajectories-card mt-2">
+              <div class="fleet-trajectories-header">
+                <div class="fleet-trajectories-title-wrap">
+                  <i class="fa-solid fa-route text-cyan"></i>
+                  <span class="fleet-trajectories-title">Fleet Orbit Trajectories</span>
+                </div>
+                <span id="fleetTrajCountBadge" class="traj-badge">0 Available</span>
+              </div>
+              <div class="fleet-trajectories-body">
+                <div class="fleet-traj-row"
+                  style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <div class="fleet-traj-label-text">
+                    <span class="traj-main-text">Show All 3D Trajectory Paths</span>
+                    <small class="fleet-traj-subtext">Render complete orbital paths for all filtered satellites</small>
+                  </div>
+                  <label class="switch-label" style="margin: 0;">
+                    <input type="checkbox" id="toggleFleetTrajectories">
+                  </label>
+                </div>
+                <button id="btnToggleFleetOrbits" class="btn-primary full-width mt-2"
+                  style="font-size: 11px; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;">
+                  <i class="fa-solid fa-circle-nodes"></i> <span id="btnToggleFleetOrbitsText">Show All Fleet
+                    Orbits</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="quick-satellite-list-header">
+            <span>TRACKED OBJECTS (<span id="visibleSatCount">0</span>)</span>
+            <button id="exportCsvQuickBtn" class="btn-xs" title="Export current list to CSV"><i
+                class="fa-solid fa-download"></i> CSV</button>
+          </div>
+          <div id="satellitesList" class="satellites-virtual-list"></div>
+        </div>
+
+        <!-- Launches Panel -->
+        <div id="launchesPanel" class="drawer-tab-content">
+          <div class="panel-intro">
+            <span>KeepTrack V4 Launch Manifest</span>
+            <button id="refreshLaunchesBtn" class="btn-xs"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div id="launchesList" class="launches-list"></div>
+        </div>
+
+        <!-- Reentries Panel -->
+        <div id="reentriesPanel" class="drawer-tab-content">
+          <div class="panel-intro">
+            <span>Predicted Atmospheric Decay</span>
+            <button id="refreshReentriesBtn" class="btn-xs"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div id="reentriesList" class="reentries-list"></div>
+        </div>
+
+        <!-- Research Panel -->
+        <div id="researchPanel" class="drawer-tab-content">
+          <div class="research-section">
+            <h4><i class="fa-solid fa-crosshairs"></i> Regional Ground Track Analysis</h4>
+            <p class="section-desc">Compute upcoming orbital passes of the selected satellite over a geographic area.
+            </p>
+            <div class="form-row">
+              <label>Target Region:</label>
+              <select id="regionSelect" class="styled-select">
+                <option value="custom">Custom Coordinates Box</option>
+                <option value="na" selected>North America (CONUS)</option>
+                <option value="eu">Europe</option>
+                <option value="apac">Asia-Pacific</option>
+                <option value="latam">Latin America</option>
+                <option value="me_africa">Middle East & Africa</option>
+              </select>
+            </div>
+            <div id="customBBoxFields" class="bbox-grid" style="display: none;">
+              <input type="number" id="minLat" placeholder="Min Lat" value="24" step="0.5">
+              <input type="number" id="maxLat" placeholder="Max Lat" value="50" step="0.5">
+              <input type="number" id="minLon" placeholder="Min Lon" value="-125" step="0.5">
+              <input type="number" id="maxLon" placeholder="Max Lon" value="-65" step="0.5">
+            </div>
+            <button id="analyzePassesBtn" class="btn-primary full-width"><i class="fa-solid fa-calculator"></i>
+              Calculate Regional Passes (24h)</button>
+            <div id="passesResults" class="passes-results"></div>
+          </div>
+
+          <div class="research-section">
+            <h4><i class="fa-solid fa-file-csv"></i> Research Data Export</h4>
+            <p class="section-desc">Export high-precision orbital elements and real-time coordinates to standard CSV.
+            </p>
+            <button id="exportSelectedCsvBtn" class="btn-secondary full-width"><i class="fa-solid fa-file-export"></i>
+              Export Selected Satellite (CSV)</button>
+            <button id="exportAllCsvBtn" class="btn-secondary full-width mt-2"><i class="fa-solid fa-database"></i>
+              Export Complete Catalog (CSV)</button>
+          </div>
+
+          <div class="research-section">
+            <h4><i class="fa-solid fa-server"></i> API Source & Data Provenance</h4>
+            <div class="provenance-card">
+              <div class="prov-row"><span>Source:</span> <strong id="provSource">KeepTrack API V4</strong></div>
+              <div class="prov-row"><span>Last Bulk Update:</span> <span id="provUpdate">-</span></div>
+              <div class="prov-row"><span>Cache ETag:</span> <span id="provEtag">-</span></div>
+              <div class="prov-row"><span>Update Policy:</span> <span>Hourly (Cache-Control: 3600)</span></div>
+              <div class="prov-row"><span>Propagator:</span> <span>OOTK SGP4 (Client-side)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bookmarks Panel -->
+        <div id="bookmarksPanel" class="drawer-tab-content">
+          <div class="panel-intro">
+            <span>Saved Satellites (<span id="savedCount">0</span>)</span>
+            <button id="clearBookmarksBtn" class="btn-xs danger"><i class="fa-solid fa-trash"></i> Clear</button>
+          </div>
+          <div id="bookmarksList" class="bookmarks-list"></div>
+        </div>
+
+        <!-- Layers Panel -->
+        <div id="layersPanel" class="drawer-tab-content">
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Realistic Earth Satellite Imagery (Esri)</span>
+              <input type="checkbox" id="layerEsri" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Country Borders & Geographic Labels</span>
+              <input type="checkbox" id="layerLabels" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Atmospheric Glow & Lighting</span>
+              <input type="checkbox" id="layerAtmosphere" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Earth Night Lights</span>
+              <input type="checkbox" id="layerNightLights" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Sun & Real-time Day/Night Terminator</span>
+              <input type="checkbox" id="layerSunLighting" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Show Ground Tracks (Selected)</span>
+              <input type="checkbox" id="layerGroundTrack">
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Show 3D Orbital Trajectory (Selected)</span>
+              <input type="checkbox" id="layerOrbitTrajectory" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span><i class="fa-solid fa-route text-cyan" style="margin-right: 6px;"></i> Show Fleet Orbit Trajectories
+                (All Filtered)</span>
+              <input type="checkbox" id="layerFleetTrajectories">
+            </label>
+          </div>
+          <div class="layer-control">
+            <label class="switch-label">
+              <span>Show Satellite Ground Footprints</span>
+              <input type="checkbox" id="layerFootprint" checked>
+            </label>
+          </div>
+          <div class="layer-control">
+            <span class="filter-label">NON-TRACKED SATELLITES DISPLAY</span>
+            <div class="filter-chips">
+              <button class="filter-chip active" data-bg-mode="all">Show All</button>
+              <button class="filter-chip" data-bg-mode="dim">Dim 90% Low</button>
+              <button class="filter-chip" data-bg-mode="hide">Hide Others (Solo)</button>
+            </div>
+            <div class="opacity-slider-wrap mt-2">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+                <span style="color: var(--text-muted);">Fleet Opacity:</span>
+                <strong id="bgOpacityVal"
+                  style="color: var(--accent-cyan); font-family: var(--font-mono);">100%</strong>
+              </div>
+              <input type="range" id="bgOpacitySlider" min="0" max="100" value="100" class="time-slider">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3D Central Globe Viewport -->
+    <div id="cesiumContainer" class="cesium-container"></div>
+
+    <!-- KeepTrack Signature Floating Target HUD Overlay -->
+    <div id="ktTargetOverlay" class="kt-target-overlay" style="display: none;">
+      <div class="kt-overlay-header">
+        <span id="ktOverlayFlag" class="kt-flag">🛰️</span>
+        <strong id="ktOverlayName" class="kt-name">SAT NAME</strong>
+      </div>
+      <div class="kt-overlay-meta">
+        <div><span>NORAD:</span> <strong id="ktOverlayNorad">00000</strong></div>
+        <div><span>Launched:</span> <strong id="ktOverlayLaunch">N/A</strong></div>
+      </div>
+    </div>
+
+    <!-- Floating Multi-Satellite Follow Dock -->
+    <div id="multiFollowDock" class="multi-follow-dock">
+      <div class="dock-header">
+        <div class="dock-title-wrap">
+          <i class="fa-solid fa-crosshairs dock-icon"></i>
+          <span class="dock-title">FLEET TRACK (<span id="followCountVal">0</span>)</span>
+        </div>
+        <div class="dock-actions">
+          <div class="dock-focus-chips">
+            <button class="dock-focus-chip active" data-bg-mode="all" title="Show all satellites">All</button>
+            <button class="dock-focus-chip" data-bg-mode="dim"
+              title="Dim other satellites to 10% opacity (90% dimmed)">Dim 90%</button>
+            <button class="dock-focus-chip" data-bg-mode="hide" title="Hide all other satellites (Solo view)">Hide
+              Others</button>
+          </div>
+          <button id="frameAllBtn" class="dock-btn-action" title="Frame all followed satellites in camera view"><i
+              class="fa-solid fa-arrows-to-eye"></i> Frame All</button>
+          <button id="clearAllFollowBtn" class="dock-btn-action danger" title="Clear followed fleet"><i
+              class="fa-solid fa-trash-can"></i> Clear</button>
+        </div>
+      </div>
+      <div id="followedPillsContainer" class="dock-pills-list">
+        <div class="dock-empty-hint">Use <strong>+ Follow</strong> in search or satellite panel to track multiple
+          satellites together.</div>
+      </div>
+      <!-- Inter-satellite relative distance (when 2+ followed) -->
+      <div id="conjunctionCard" class="conjunction-card" style="display: none;">
+        <span class="conj-label"><i class="fa-solid fa-arrows-left-right"></i> INTER-SAT DISTANCE:</span>
+        <span id="conjDistanceVal" class="conj-val">--- km</span>
+        <span id="conjRelVelVal" class="conj-sub">Δv: --- km/s</span>
+      </div>
+    </div>
+
+    <!-- Right Satellite Information Panel -->
+    <aside id="satDetailPanel" class="sat-detail-panel collapsed">
+      <div class="sat-panel-header">
+        <div class="sat-title-block">
+          <div class="sat-type-badge" id="satOrbitBadge">LEO</div>
+          <h2 id="satNameVal">INTERNATIONAL SPACE STATION</h2>
+          <div class="sat-sub-row">
+            <span class="sat-norad">NORAD: <strong id="satNoradVal">25544</strong></span>
+            <span class="sat-country">COUNTRY: <strong id="satCountryVal">US</strong></span>
+            <button id="bookmarkToggleBtn" class="icon-btn-star" title="Save Satellite"><i
+                class="fa-regular fa-star"></i></button>
+          </div>
+        </div>
+        <button id="closeSatPanelBtn" class="icon-btn close-panel-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Live Telemetry Card -->
+      <div class="telemetry-grid">
+        <div class="telem-card">
+          <span class="telem-label">LATITUDE</span>
+          <span class="telem-val" id="satLatVal">0.0000°</span>
+        </div>
+        <div class="telem-card">
+          <span class="telem-label">LONGITUDE</span>
+          <span class="telem-val" id="satLonVal">0.0000°</span>
+        </div>
+        <div class="telem-card">
+          <span class="telem-label">ALTITUDE</span>
+          <span class="telem-val" id="satAltVal">420.5 km</span>
+        </div>
+        <div class="telem-card">
+          <span class="telem-label">VELOCITY</span>
+          <span class="telem-val" id="satVelVal">7.66 km/s</span>
+        </div>
+        <div class="telem-card">
+          <span class="telem-label">INCLINATION</span>
+          <span class="telem-val" id="satIncVal">51.64°</span>
+        </div>
+        <div class="telem-card">
+          <span class="telem-label">PERIOD</span>
+          <span class="telem-val" id="satPeriodVal">92.8 min</span>
+        </div>
+      </div>
+
+      <!-- Detail Sub-tabs -->
+      <div class="sat-tabs">
+        <button class="sat-tab-btn active" data-tab="tabOverview">Overview</button>
+        <button class="sat-tab-btn" data-tab="tabElements">Orbit Elements</button>
+        <button class="sat-tab-btn" data-tab="tabSpecs">Specs (API)</button>
+        <button class="sat-tab-btn" data-tab="tabOmm">OMM (API)</button>
+        <button class="sat-tab-btn" data-tab="tabTle">Raw TLE</button>
+      </div>
+
+      <div class="sat-tab-body">
+        <!-- Overview Tab -->
+        <div id="tabOverview" class="sat-tab-pane active">
+          <table class="info-table">
+            <tr>
+              <td>Mission Purpose</td>
+              <td id="satPurposeVal">Human Spaceflight</td>
+            </tr>
+            <tr>
+              <td>Launch Date</td>
+              <td id="satLaunchVal">1998-11-20</td>
+            </tr>
+            <tr>
+              <td>Radar Cross Section</td>
+              <td id="satRcsVal">LARGE (&gt;10 m²)</td>
+            </tr>
+            <tr>
+              <td>Visual Magnitude</td>
+              <td id="satVmagVal">-1.5 (Naked Eye)</td>
+            </tr>
+            <tr>
+              <td>Operational Status</td>
+              <td id="satStatusVal">OPERATIONAL</td>
+            </tr>
+            <tr>
+              <td>Spacecraft Bus</td>
+              <td id="satBusVal">Modular ISS</td>
+            </tr>
+            <tr>
+              <td>Apogee Altitude</td>
+              <td id="satApogeeVal">422 km</td>
+            </tr>
+            <tr>
+              <td>Perigee Altitude</td>
+              <td id="satPerigeeVal">418 km</td>
+            </tr>
+            <tr>
+              <td>Semi-Major Axis</td>
+              <td id="satSmaVal">6790 km</td>
+            </tr>
+            <tr>
+              <td>Eccentricity</td>
+              <td id="satEccVal">0.0003</td>
+            </tr>
+          </table>
+          <div class="sat-actions">
+            <button id="focusSatBtn" class="btn-primary"><i class="fa-solid fa-crosshairs"></i> Follow
+              Satellite</button>
+            <button id="multiFollowToggleBtn" class="btn-secondary" title="Add/Remove from Multi-Follow Fleet"><i
+                class="fa-solid fa-plus"></i> Multi-Follow</button>
+            <button id="isolateSatBtn" class="btn-secondary"
+              title="Dim or hide all other satellites to focus on this satellite"><i
+                class="fa-solid fa-eye-low-vision"></i> Dim Others</button>
+            <button id="exportSatCsvBtn" class="btn-secondary"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Orbit Elements Tab -->
+        <div id="tabElements" class="sat-tab-pane">
+          <table class="info-table mono">
+            <tr>
+              <td>Inclination (i)</td>
+              <td id="elInc">-</td>
+            </tr>
+            <tr>
+              <td>RAAN (Ω)</td>
+              <td id="elRaan">-</td>
+            </tr>
+            <tr>
+              <td>Eccentricity (e)</td>
+              <td id="elEcc">-</td>
+            </tr>
+            <tr>
+              <td>Arg of Perigee (ω)</td>
+              <td id="elArgP">-</td>
+            </tr>
+            <tr>
+              <td>Mean Anomaly (M)</td>
+              <td id="elMeanA">-</td>
+            </tr>
+            <tr>
+              <td>Mean Motion (n)</td>
+              <td id="elMeanM">-</td>
+            </tr>
+            <tr>
+              <td>Orbital Period</td>
+              <td id="elPeriod">-</td>
+            </tr>
+            <tr>
+              <td>BSTAR Drag</td>
+              <td id="elBstar">-</td>
+            </tr>
+            <tr>
+              <td>Epoch Time</td>
+              <td id="elEpoch">-</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Specs Tab (GET /v4/sats/{id}) -->
+        <div id="tabSpecs" class="sat-tab-pane">
+          <div class="api-source-tag"><i class="fa-solid fa-network-wired"></i> KeepTrack GET /v4/sats/{id}</div>
+          <div id="specsContent" class="dynamic-api-content">
+            <div class="loading-spinner"><i class="fa-solid fa-spinner fa-spin"></i> Loading KeepTrack specifications...
+            </div>
+          </div>
+        </div>
+
+        <!-- OMM Tab (GET /v4/sat/{id}/omm) -->
+        <div id="tabOmm" class="sat-tab-pane">
+          <div class="api-source-tag"><i class="fa-solid fa-network-wired"></i> KeepTrack GET /v4/sat/{id}/omm</div>
+          <div id="ommContent" class="dynamic-api-content">
+            <div class="loading-spinner"><i class="fa-solid fa-spinner fa-spin"></i> Loading CCSDS OMM record...</div>
+          </div>
+        </div>
+
+        <!-- Raw TLE Tab (GET /v4/sat/{id}/tle) -->
+        <div id="tabTle" class="sat-tab-pane">
+          <div class="api-source-tag"><i class="fa-solid fa-network-wired"></i> Two-Line Element Set (TLE)</div>
+          <pre id="rawTleDisplay" class="tle-box">Loading TLE...</pre>
+          <button id="copyTleBtn" class="btn-xs mt-2"><i class="fa-regular fa-copy"></i> Copy TLE to Clipboard</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Simulation Disclaimer Floating Banner Removed -->
+  </main>
+
+  <!-- Bottom Timeline & Simulation Bar -->
+  <footer class="app-timeline">
+    <div class="timeline-left">
+      <!-- Play / Pause / Reset -->
+      <button id="simPlayPauseBtn" class="sim-btn play-btn" title="Play / Pause Simulation (Spacebar)"><i
+          class="fa-solid fa-play"></i></button>
+      <button id="simStepBackBtn" class="sim-btn" title="Step Back 10 Minutes"><i
+          class="fa-solid fa-backward-step"></i></button>
+      <button id="simStepFwdBtn" class="sim-btn" title="Step Forward 10 Minutes"><i
+          class="fa-solid fa-forward-step"></i></button>
+      <button id="simNowBtn" class="sim-btn now-btn" title="Reset to Real-Time Now"><i
+          class="fa-solid fa-clock-rotate-left"></i> REAL-TIME</button>
+
+      <!-- Speed Multipliers -->
+      <div class="speed-selector">
+        <span class="speed-label">SPEED:</span>
+        <button class="speed-btn active" data-speed="1">1x</button>
+        <button class="speed-btn" data-speed="5">5x</button>
+        <button class="speed-btn" data-speed="10">10x</button>
+        <button class="speed-btn" data-speed="60">60x</button>
+        <button class="speed-btn" data-speed="300">300x</button>
+        <button class="speed-btn" data-speed="1000">1000x</button>
+      </div>
+    </div>
+
+    <!-- Center Scrubber & Time Display -->
+    <div class="timeline-center">
+      <div class="time-readout">
+        <div class="time-tz-row">
+          <span class="time-tag">SIMULATION TIME:</span>
+          <select id="timezoneSelect" class="styled-tz-select" title="Select Display Timezone">
+            <option value="Asia/Kolkata" selected>India (IST, UTC+5:30)</option>
+            <option value="UTC">UTC / GMT (Zulu)</option>
+            <option value="local">Local Browser Time</option>
+            <option value="America/New_York">US Eastern (EST/EDT)</option>
+            <option value="America/Los_Angeles">US Pacific (PST/PDT)</option>
+            <option value="Europe/London">London (GMT/BST)</option>
+            <option value="Europe/Paris">Central Europe (CET)</option>
+            <option value="Asia/Tokyo">Tokyo (JST, +9)</option>
+            <option value="Asia/Dubai">Gulf / UAE (GST, +4)</option>
+          </select>
+        </div>
+        <span id="simTimeDisplay" class="time-digits">Loading...</span>
+        <span id="timeDiffBadge" class="time-diff-badge live">REAL-TIME</span>
+      </div>
+      <div class="scrubber-container">
+        <span class="scrub-bound" id="scrubMinTime">-24h</span>
+        <input type="range" id="timeScrubber" min="0" max="1000" value="500" class="time-slider">
+        <span class="scrub-bound" id="scrubMaxTime">+24h</span>
+      </div>
+    </div>
+
+    <!-- Right Controls: Date/Time Picker, Time Machine & Branding -->
+    <div class="timeline-right">
+      <button id="openTimeMachineBtn" class="sim-btn tm-btn" title="Open Historical Date & Mission Presets">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>TIME MACHINE</span>
+      </button>
+      <div class="datetime-picker-wrap" id="simDatePickerWrap" title="Click to choose simulation date & time">
+        <button id="triggerCalendarBtn" class="calendar-icon-btn" title="Open Calendar Picker">
+          <i class="fa-regular fa-calendar-days"></i>
+        </button>
+        <input type="datetime-local" id="simDatePicker" class="styled-datetime" title="Click to choose date and time">
+        <button id="applyCustomDateBtn" class="btn-xs" title="Jump to specified date/time"><i
+            class="fa-solid fa-arrow-right"></i></button>
+      </div>
+
+      <!-- Mohsin Khawja Branding -->
+      <div class="mission-branding-dock" title="SATNEX — Made with ❤️ by Mohsin Khawja">
+        <span class="branding-led"></span>
+        <span class="branding-author">Made with <i class="fa-solid fa-heart text-heart"></i> by Mohsin Khawja</span>
+      </div>
+  </footer>
+
+  <!-- Attribution Footer for Imagery Provider -->
+  <div id="cesiumCredit" class="cesium-credit-container"></div>
+
+  <!-- API Key Modal -->
+  <div id="apiKeyModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-key"></i> KeepTrack API V4 Authentication</h3>
+        <button id="closeApiKeyModal" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Enter your personal KeepTrack API Key. The key is securely stored in local environment variables (<span
+            class="mono-tag">.env</span>) and never hardcoded or transmitted elsewhere.
+        </p>
+        <div class="form-group">
+          <label for="apiKeyInput">X-API-Key:</label>
+          <input type="password" id="apiKeyInput" placeholder="Enter KeepTrack API key..." class="styled-input">
+        </div>
+        <div class="api-help-text">
+          <i class="fa-solid fa-circle-question"></i> Free API keys can be generated at <a
+            href="https://keeptrack.space/api" target="_blank" rel="noopener">keeptrack.space/api</a> in your user menu.
+        </div>
+        <div id="apiKeyStatusMsg" class="modal-alert" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="testSaveKeyBtn" class="btn-primary"><i class="fa-solid fa-check"></i> Verify & Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historical Time Machine / Epoch Picker Modal -->
+  <div id="timeMachineModal" class="modal-overlay">
+    <div class="modal-card time-machine-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-clock-rotate-left"></i> Historical Orbit Simulation & Time Machine</h3>
+        <button id="closeTimeMachineBtn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Propagate satellite orbital positions across any historical or future epoch via SGP4 mathematics.
+        </p>
+
+        <!-- Custom Date & Time Inputs -->
+        <div class="time-machine-inputs-grid">
+          <div class="tm-field">
+            <label><i class="fa-regular fa-calendar"></i> Target Date:</label>
+            <input type="date" id="tmDateInput" class="styled-input">
+          </div>
+          <div class="tm-field">
+            <label><i class="fa-regular fa-clock"></i> Target Time (UTC):</label>
+            <input type="time" id="tmTimeInput" step="1" class="styled-input">
+          </div>
+        </div>
+
+        <div class="tm-timezone-row">
+          <span>Time Reference: <strong class="text-cyan">UTC (Universal Time)</strong></span>
+          <button id="tmNowBtn" class="btn-xs"><i class="fa-solid fa-rotate-left"></i> Reset to Now</button>
+        </div>
+
+        <!-- Quick Historic Space Milestones Presets -->
+        <div class="tm-presets-section">
+          <span class="tm-section-title"><i class="fa-solid fa-shuttle-space"></i> HISTORIC SPACE MILESTONES</span>
+          <div class="tm-presets-grid">
+            <button class="tm-preset-btn" data-date="1957-10-04T19:28:34Z">
+              <span class="preset-name">Sputnik 1 Launch</span>
+              <span class="preset-date">Oct 4, 1957</span>
+            </button>
+            <button class="tm-preset-btn" data-date="1969-07-20T20:17:00Z">
+              <span class="preset-name">Apollo 11 Landing</span>
+              <span class="preset-date">Jul 20, 1969</span>
+            </button>
+            <button class="tm-preset-btn" data-date="1990-04-24T12:33:51Z">
+              <span class="preset-name">Hubble Deployment</span>
+              <span class="preset-date">Apr 24, 1990</span>
+            </button>
+            <button class="tm-preset-btn" data-date="1998-11-20T06:40:00Z">
+              <span class="preset-name">ISS First Module (Zarya)</span>
+              <span class="preset-date">Nov 20, 1998</span>
+            </button>
+            <button class="tm-preset-btn" data-date="2021-12-25T12:20:00Z">
+              <span class="preset-name">James Webb Space Telescope</span>
+              <span class="preset-date">Dec 25, 2021</span>
+            </button>
+            <button class="tm-preset-btn" data-date="2024-01-01T00:00:00Z">
+              <span class="preset-name">Start of 2024</span>
+              <span class="preset-date">Jan 1, 2024</span>
+            </button>
+          </div>
+
+          <span class="tm-section-title mt-3"><i class="fa-solid fa-hourglass-half"></i> QUICK TIMELINE JUMPS</span>
+          <div class="tm-offsets-grid">
+            <button class="tm-offset-btn" data-offset="-3600000">-1 Hour</button>
+            <button class="tm-offset-btn" data-offset="-86400000">-24 Hours (Yesterday)</button>
+            <button class="tm-offset-btn" data-offset="-604800000">-7 Days</button>
+            <button class="tm-offset-btn" data-offset="-2592000000">-30 Days</button>
+            <button class="tm-offset-btn" data-offset="-31536000000">-1 Year</button>
+            <button class="tm-offset-btn" data-offset="86400000">+24 Hours (Tomorrow)</button>
+            <button class="tm-offset-btn" data-offset="604800000">+7 Days</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="tmCancelBtn" class="btn-secondary">Cancel</button>
+        <button id="tmApplyBtn" class="btn-primary"><i class="fa-solid fa-rocket"></i> Jump Simulation to Epoch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Architecture & About Modal -->
+  <div id="aboutModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-satellite-dish"></i> SatTrack Architecture & Data Sources</h3>
+        <h3><i class="fa-solid fa-satellite-dish"></i> SATNEX Architecture & Data Sources</h3>
+        <button id="closeAboutModal" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <h4>Architecture Highlights</h4>
+        <ul class="about-list">
+          <li><strong>KeepTrack API V4:</strong> Integrated via single bulk fetch (<span
+              class="mono-tag">/v4/sats/brief</span>) with ETag validation and 1-hour disk cache.</li>
+          <li><strong>Orbital Mechanics:</strong> Powered client-side by KeepTrack's official <strong>OOTK (Orbital
+              Object Toolkit v8.2.0)</strong> SGP4 engine without continuous API position polling.</li>
+          <li><strong>3D Earth Globe:</strong> Powered by <strong>CesiumJS</strong> using Esri World Imagery (satellite
+            composite) and CartoDB boundaries & geographic labels.</li>
+          <li><strong>Historical & Future Simulation:</strong> Computes true orbital dynamics across arbitrary
+            timestamps with clear distinction between simulated orbits and modern base Earth imagery.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tooltip Element -->
+  <div id="globeTooltip" class="globe-tooltip"></div>
+
+  <!-- Configure Cesium Base URL for internal workers, assets, and shaders -->
+  <script>
+    window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/';
+  </script>
+
+  <!-- CesiumJS Library -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Cesium.js"></script>
+
+  <!-- Bundled OOTK Library (KeepTrack Orbital Object Toolkit) -->
+  <script src="ootk.bundle.js"></script>
+
+  <!-- Application Modules -->
+  <script src="js/orbit-engine.js?v=3.1"></script>
+  <script src="js/cesium-manager.js?v=3.1"></script>
+  <script src="js/search-manager.js?v=3.1"></script>
+  <script src="js/ui-manager.js?v=3.1"></script>
+  <script src="js/app.js?v=3.1"></script>
+  <script src="js/orbit-engine.js?v=3.3"></script>
+  <script src="js/cesium-manager.js?v=3.3"></script>
+  <script src="js/search-manager.js?v=3.3"></script>
+  <script src="js/ui-manager.js?v=3.3"></script>
+  <script src="js/app.js?v=3.3"></script>
+</body>
+
+</html>
